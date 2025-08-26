@@ -21,3 +21,4 @@ fastapi
 uvicorn
 sqlmodel
 requests
+apscheduler==3.10.4
