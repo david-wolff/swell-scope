@@ -1,0 +1,2 @@
+*.db
+!seed/swellscope.base.db.gz
