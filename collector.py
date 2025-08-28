@@ -7,6 +7,16 @@ LAT, LON = -22.9649, -43.1729
 LOCATION = "Leme-RJ"
 SOURCE = "open-meteo"
 
+import requests
+from datetime import datetime
+from models import WaveRecord, get_session
+from sqlmodel import select
+from sqlalchemy import text  # necessário para rodar SQL bruto
+
+LAT, LON = -22.9649, -43.1729
+LOCATION = "Leme-RJ"
+SOURCE = "open-meteo"
+
 def run_collector():
     print("[START] Coletando dados do mar e da atmosfera...")
 
@@ -57,7 +67,7 @@ def run_collector():
             ).first()
 
             if existing:
-                continue  # já existe, não insere
+                continue
 
             session.add(WaveRecord(
                 ts=ts,
@@ -75,4 +85,15 @@ def run_collector():
 
         session.commit()
 
-    print(f"[OK] Inseridos {inserted} novos registros no banco.")
+        # 🚿 Limpeza de duplicatas no final
+        session.exec(text("""
+            DELETE FROM waverecord
+            WHERE rowid NOT IN (
+                SELECT MIN(rowid)
+                FROM waverecord
+                GROUP BY ts, source, location
+            );
+        """))
+        session.commit()
+
+    print(f"[OK] Inseridos {inserted} novos registros no banco (duplicatas removidas).")
