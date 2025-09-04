@@ -5,10 +5,16 @@ from sqlmodel import select, and_
 from typing import Optional, List
 from datetime import datetime, timezone, time, timedelta
 import requests
+import os
 from zoneinfo import ZoneInfo
 from scheduler import start_scheduler
 from models import create_db_and_tables, get_session, WaveRecord
 from collector import run_collector
+
+API_KEY = os.getenv("STORMGLASS_API_KEY")
+if not API_KEY:
+    raise HTTPException(status_code=500, detail="STORMGLASS_API_KEY ausente")
+headers = {"Authorization": API_KEY}
 
 LAT, LON = -22.9649, -43.1729
 
@@ -123,7 +129,6 @@ def waves_summary():
 
 @app.get("/tides/")
 def get_tides(start: Optional[datetime] = None, end: Optional[datetime] = None):
-    API_KEY = "10f2a39e-e464-11ed-a26f-0242ac130002-10f2a42a-e464-11ed-a26f-0242ac130002"
     LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 
     # --- helper: garante datetime c/ timezone local (se vier naive, assume local) ---
