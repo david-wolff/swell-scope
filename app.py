@@ -131,32 +131,22 @@ def waves_summary():
 def get_tides(start: Optional[datetime] = None, end: Optional[datetime] = None):
     LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 
-    # --- helper: garante datetime c/ timezone local (se vier naive, assume local) ---
-    def to_local(dt: Optional[datetime]) -> Optional[datetime]:
-        if dt is None:
-            return None
-        if dt.tzinfo is None:
-            # interpretamos valores sem timezone como hora local
-            return dt.replace(tzinfo=LOCAL_TZ)
-        return dt.astimezone(LOCAL_TZ)
-
     today = datetime.now(tz=LOCAL_TZ).date()
-    day_after_tomorrow = today + timedelta(days=2)
+    tomorrow = today + timedelta(days=2)
 
-    # janela pedida à Stormglass (pode ajustar se quiser mais dias)
     params = {
         "lat": LAT,
         "lng": LON,
-        "start": today.isoformat(),              # API aceita datas ISO (YYYY-MM-DD)
-        "end": day_after_tomorrow.isoformat(),   # cobrimos hoje + amanhã
+        "start": today.isoformat(),
+        "end": tomorrow.isoformat(),
         "height": "true",
-        "type": "true",
+        "type": "true"
     }
 
     headers = {"Authorization": API_KEY}
     url = "https://api.stormglass.io/v2/tide/extremes/point"
 
-    response = requests.get(url, params=params, headers=headers, timeout=20)
+    response = requests.get(url, params=params, headers=headers)
     if response.status_code != 200:
         raise HTTPException(status_code=502, detail="Erro ao consultar a Stormglass")
 
@@ -164,32 +154,20 @@ def get_tides(start: Optional[datetime] = None, end: Optional[datetime] = None):
     if not data:
         return {"items": []}
 
-    # limites de filtro em horário local (sempre tz-aware)
-    start_local = to_local(start) or datetime.combine(today, time.min, tzinfo=LOCAL_TZ)
-    end_local   = to_local(end)   or datetime.combine(day_after_tomorrow, time.max, tzinfo=LOCAL_TZ)
+    # Conversão e filtro local
+    start = start or datetime.combine(today, time.min, tzinfo=LOCAL_TZ)
+    end = end or datetime.combine(tomorrow, time.max, tzinfo=LOCAL_TZ)
 
     result = []
     for item in data:
-        # item["time"] vem em UTC (ex.: "2025-08-27T07:32:00+00:00" ou "…Z")
-        raw = item.get("time")
-        if not raw:
-            continue
-        try:
-            ts_aware_utc = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-        except Exception:
-            # fallback simples (sem microssegundos); ajuste o formato se necessário
-            ts_aware_utc = datetime.strptime(raw.replace("Z", "+0000"), "%Y-%m-%dT%H:%M:%S%z")
-
-        ts_local = ts_aware_utc.astimezone(LOCAL_TZ)
-
-        # agora a comparação é entre tz-aware no mesmo fuso
-        if start_local <= ts_local <= end_local:
+        ts_utc = datetime.fromisoformat(item["time"].replace("Z", "+00:00")).astimezone(LOCAL_TZ)
+        if start <= ts_utc <= end:
             result.append({
-                "ts": ts_local.isoformat(),           # devolvendo em horário local
+                "ts": ts_utc.isoformat(),
                 "type": item.get("type"),
                 "height": item.get("height"),
                 "source": "stormglass",
-                "location": "Leme-RJ",
+                "location": "Leme-RJ"
             })
 
     return {"items": result}
